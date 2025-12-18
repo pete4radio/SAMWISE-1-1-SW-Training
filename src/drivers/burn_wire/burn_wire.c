@@ -1,6 +1,10 @@
 /**
  * @author Niklas Vainio
  * @date 2025-03-01
+ * 
+ * Powering the burn wire releases the solar panels and UHF antenna.  
+ * It heats the nichrome wire to melt the fishing line.
+ * 
  */
 
 #include "burn_wire.h"

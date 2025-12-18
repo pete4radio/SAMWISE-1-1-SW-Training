@@ -5,14 +5,14 @@
 #include "hardware/i2c.h"
 #include "macros.h"
 
-// ADM1176 I2C Address (0x94)
+// ADM1176 I2C Address
 #define ADM1176_I2C_ADDR 0x4A
 
 // ADM1176 Data Masks
 #define DATA_V_MASK 0xF0
 #define DATA_I_MASK 0x0F
 
-// Pre‐allocated I2C buffers
+// Pre‐allocated I2C buffers avoid heap fragmentation with controlled namespace
 static uint8_t _cmd_buf[1];
 static uint8_t _ext_cmd_buf[2] = {0x00, 0x04};
 static uint8_t _read_buf[3];

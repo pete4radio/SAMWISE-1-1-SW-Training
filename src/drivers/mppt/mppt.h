@@ -61,5 +61,17 @@ uint16_t mppt_get_battery_current(mppt_t *device);
 uint16_t mppt_get_voltage(mppt_t *device);
 uint16_t mppt_get_vin_voltage(mppt_t *device);
 uint16_t mppt_get_current(mppt_t *device);
+
+/* Error-returning variants: return `true` on success and write the value to
+ * the out parameter. These are safer for production code that needs to
+ * distinguish I2C/read failures from valid telemetry values. The original
+ * convenience getters remain for backward compatibility and call the _ex
+ * variants internally.
+ */
+bool mppt_get_battery_voltage_ex(mppt_t *device, uint16_t *out_mV);
+bool mppt_get_battery_current_ex(mppt_t *device, uint16_t *out_mA);
+bool mppt_get_voltage_ex(mppt_t *device, uint16_t *out_mV);
+bool mppt_get_vin_voltage_ex(mppt_t *device, uint16_t *out_mV);
+bool mppt_get_current_ex(mppt_t *device, uint16_t *out_mA);
 void mppt_init(mppt_t *device);
 void mppt_read_telemetry(mppt_t *device);

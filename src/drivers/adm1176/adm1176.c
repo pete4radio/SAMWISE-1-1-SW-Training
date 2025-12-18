@@ -1,6 +1,10 @@
 /**
  * @author: Marc Aaron Reyes
  * @date: 2025-05-21
+ * 
+ * Measures battery voltage and current using the ADM1176 power monitor IC via I2C.
+ * https://www.analog.com/media/en/technical-documentation/data-sheets/adm1176.pdf
+ * 
  */
 #include "adm1176.h"
 
@@ -89,7 +93,7 @@ float adm1176_get_current(adm1176_t *pwm)
     i2c_read_blocking_until(pwm->i2c, pwm->address, _read_buf, 3, false,
                             make_timeout_time_ms(I2C_TIMEOUT_MS));
 
-    float raw_amps = ((_read_buf[0] << 8) | (_read_buf[2] & DATA_V_MASK)) >> 4;
+    float raw_amps = ((_read_buf[0] << 8) | (_read_buf[2] & DATA_I_MASK));
     return ((0.10584f / 4096.0f) * raw_amps) / pwm->sense_resistor;
 }
 
@@ -128,7 +132,7 @@ bool adm1176_read_status(adm1176_t *pwm, uint8_t *status_out)
     if (!pwm || !pwm->i2c)
     {
         LOG_DEBUG("ADM1176: NULL pointer\n");
-        return true;
+        return false;
     }
     // 1) Write the command byte with STATUS_RD = 1 (bit 6).
     uint8_t cmd = (1 << 6); // C6 = 1 → STATUS_RD

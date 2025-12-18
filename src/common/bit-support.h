@@ -45,9 +45,9 @@ static inline uint32_t bit_is_off(uint32_t x, uint32_t bit)
 static inline uint32_t bits_mask(uint32_t nbits)
 {
     // all bits on.
-    if (nbits == 32)
+    if (nbits >= 32)
         return ~0;
-    return (1 << nbits) - 1;
+    return (1u << nbits) - 1;
 }
 
 // extract bits [lb:ub]  (inclusive)

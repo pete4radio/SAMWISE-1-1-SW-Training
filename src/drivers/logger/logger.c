@@ -1,8 +1,17 @@
 #include "logger.h"
 
+#include <stdarg.h>
+#include <stdio.h>
 // Track enabled sinks using bitwise OR
 static uint8_t enabled_sinks =
     LOG_SINK_TEST | LOG_SINK_FLASH | LOG_SINK_DISK | LOG_SINK_USB;
+
+/* File-scope buffer to avoid large stack usage in `log_message`.
+ * Single buffer is not reentrant; protect with a mutex if used from
+ * multiple tasks/ISRs. Size chosen conservatively for embedded use.
+ */
+#define LOG_BUFFER_SIZE 1024
+static char log_buffer[LOG_BUFFER_SIZE];
 
 // Initialize logger system
 void logger_init(void)
@@ -41,11 +50,10 @@ void log_message(LOG_LEVEL level, uint8_t sink_mask, const char *fmt, ...)
         return;
     }
 
-    // Format the message
-    char buffer[1000];
+    // Format the message into the file-scope buffer
     va_list args;
     va_start(args, fmt);
-    vsnprintf(buffer, sizeof(buffer), fmt, args);
+    int n = vsnprintf(log_buffer, sizeof(log_buffer), fmt, args);
     va_end(args);
 
     // Output to each enabled sink
@@ -53,7 +61,9 @@ void log_message(LOG_LEVEL level, uint8_t sink_mask, const char *fmt, ...)
     // Both USB & testing use printf
     if (sink_mask & LOG_SINK_TEST || sink_mask & LOG_SINK_USB)
     {
-        printf("%s", buffer);
+        /* Prefix with seconds since boot for quick timestamps */
+        uint64_t secs = time_us_64() / 1000000ULL;
+        printf("[%llu] %s ", (unsigned long long)secs, log_buffer);
     }
 
     if (sink_mask & LOG_SINK_FLASH)

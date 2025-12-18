@@ -20,7 +20,7 @@ extern slate_t slate;
 
 #ifndef PICO
 // Ensure that PICO_RP2350A is defined to 0 for PICUBED builds.
-// This is to enable full 48pin GPIO support on the RP2350A chip.
+// This is to enable full 48pin GPIO support on the RP2350B chip.
 // boards/samwise_picubed.h should define it to 0.
 // The CMakeLists.txt file points to this file for the board definition.
 static_assert(PICO_RP2350A == 0,
@@ -30,12 +30,28 @@ static_assert(PICO_RP2350A == 0,
 /**
  * Main code entry point.
  *
- * This should never return (unless something really bad happens!)
+ * SAMWISE is a 2U Cubesat with four processors:  This is the flight
+ * processor, a GNC processor, a reaction wheel controller, and a 
+ * RPi payload processor with a camera.  The processors communicate 
+ * via UART.
+ * 
+ * Key features are listed below:
+ * - RFM9x LoRa Radio for ground communication
+ * - Neopixel RGB LED for status indication
+ * - Persistent flash storage for reboot counter and other data
+ * - Watchdog timer to ensure system reliability
+ * - State machine scheduler for managing operational states
+ * - Safe sleep function to handle delays without triggering the watchdog
+ * - Power telemetry monitoring for battery and solar panel status
+ * - over-the-air flight firmware updates
+ * 
  */
 int main()
 {
-    // We need to first initialize watchdog before any sleep is called.
-    // Watchdog needs to be fed periodically to prevent rebooting.
+    // Initialize watchdog before any sleep is called.
+    // The external Watchdog timer is reset regularly by the firmware; if
+    // the flight software fails due to latchup or other issues, the watchdog
+    // powers off the flight processor and powers it on again to reboot.
     slate.watchdog = watchdog_mk();
     watchdog_init(&slate.watchdog);
 
@@ -57,7 +73,7 @@ int main()
      */
     persistent_data_t *data = init_persistent_data();
     increment_reboot_counter();
-    LOG_INFO("Current reboot count: %d\n", data->reboot_counter);
+    LOG_INFO("Current reboot count: %d", data->reboot_counter);
 
     /*
      * Initialize everything.
@@ -91,5 +107,5 @@ int main()
      * @todo reboot!
      */
 
-    ERROR("We reached the end of the code - this is REALLY BAD!");
+    ERROR("Wait for WDT reboot");
 }

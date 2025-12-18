@@ -2,7 +2,7 @@
  * @author Niklas Vainio and Marc Reyes
  * @date 2025-01-18
  *
- * UART packet and command handler routines for communicating with the RPi
+ * Bidirectional UART packet and command handler for communicating with the RPi
  */
 #include "hardware/irq.h"
 #include "hardware/uart.h"
@@ -25,7 +25,7 @@
 #define PARITY UART_PARITY_NONE
 
 // Packet parameters
-#define MAX_PACKET_LEN 4069
+#define MAX_PACKET_LEN 4096
 #define ACK_BYTE '!'
 #define SYN_RETRIES 3
 #define SYN_BYTE '$'
@@ -57,10 +57,10 @@ static void uart_rx_callback()
 
 // From https://gist.github.com/xobs/91a84d29152161e973d717b9be84c4d0
 // (not using fast version because we want small binary size)
-unsigned int crc32(const uint8_t *message, uint16_t len)
+uint32_t crc32(const uint8_t *message, uint16_t len)
 {
     size_t i;
-    unsigned int byte, crc, mask;
+    uint32_t byte, crc, mask;
 
     i = 0;
     crc = 0xFFFFFFFF;
@@ -79,7 +79,7 @@ unsigned int crc32(const uint8_t *message, uint16_t len)
 }
 
 /**
- * Return the header for a gien message packet
+ * Return the header for a given message packet
  */
 static packet_header_t compute_packet_header(const uint8_t *packet,
                                              uint16_t len, uint16_t seq_num)
@@ -100,19 +100,16 @@ static uint16_t receive_into(slate_t *slate, void *dest, uint16_t num_bytes,
     absolute_time_t start = get_absolute_time();
     uint8_t *dest_ptr = (uint8_t *)dest; // Convert to char* for arithmetic
     uint16_t bytes_received = 0;
+    /* Continue while still within the timeout AND a byte was
+     * successfully removed from the queue. Stops early if the queue is empty
+     * or the desired number of bytes has been received.
+     */
     while (absolute_time_diff_us(start, get_absolute_time()) <
-           timeout_ms * 1000)
+               (int64_t)timeout_ms * 1000 &&
+           bytes_received < num_bytes &&
+           queue_try_remove(&slate->rpi_uart_queue, dest_ptr + bytes_received))
     {
-        // Drain the queue
-        while (
-            queue_try_remove(&slate->rpi_uart_queue, dest_ptr + bytes_received))
-        {
-            bytes_received++;
-            if (bytes_received == num_bytes)
-            {
-                return num_bytes;
-            }
-        }
+        bytes_received++;
     }
 
     return bytes_received;
@@ -135,6 +132,7 @@ static bool receive_syn(slate_t *slate)
     while (true)
     {
         uint8_t received_byte;
+// 1s MAX blocking wait for each SYN_BYTE
         uint16_t received = receive_into(slate, &received_byte, 1, 1000);
 
         if (!received)
@@ -159,6 +157,7 @@ static bool receive_header_start(slate_t *slate)
     while (run_count < START_TRIES)
     {
         uint8_t received_byte;
+// 1s MAX blocking wait for each START_BYTE
         uint16_t received = receive_into(slate, &received_byte, 1, 1000);
 
         if (!received)
