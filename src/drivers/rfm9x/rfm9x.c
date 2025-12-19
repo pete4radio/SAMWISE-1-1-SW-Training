@@ -113,13 +113,13 @@ void rfm9x_reset(rfm9x_t *r)
 {
     // Reset the chip as per RFM9X.pdf 7.2.2 p109
 
-    // set reset pin to output
+    // set reset pin to output and assert it low
     gpio_set_dir(r->reset_pin, GPIO_OUT);
     gpio_put(r->reset_pin, 0);
 
     sleep_us(100);
-
-    // set reset pin to input
+    
+    // set reset pin to input to release the line to HI-Z, it's operational state
     gpio_set_dir(r->reset_pin, GPIO_IN);
 
     safe_sleep_ms(5);
@@ -638,7 +638,6 @@ void rfm9x_init(rfm9x_t *r)
     gpio_init(r->reset_pin);
     gpio_set_dir(r->reset_pin, GPIO_IN);
     gpio_disable_pulls(r->reset_pin);
-    gpio_put(r->reset_pin, 1);
 
     // Setup cs line
     gpio_init(r->spi_cs_pin);
