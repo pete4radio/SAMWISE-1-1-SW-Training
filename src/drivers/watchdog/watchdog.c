@@ -1,12 +1,13 @@
 #include "watchdog.h"
 
+// Low for 1s, high for 200ms.  The WDT resets in 20 seconds determined by hardware if not reset
 struct watchdog watchdog_mk()
 {
     return (struct watchdog){
         .pin = SAMWISE_WATCHDOG_FEED_PIN,
         .last_transition = nil_time,
         .set = false,
-        .us_low = 1000 * 1000,                      // 5 second
+        .us_low = 1000 * 1000,                      // 1 second
         .us_high = MIN_WATCHDOG_INTERVAL_MS * 1000, // 200ms
         .is_initialized = false,
     };
@@ -30,6 +31,8 @@ void watchdog_feed(struct watchdog *wd)
     {
         watchdog_init(wd);
     }
+
+    //  Toggle the watchdog pin based on the timing intervals
     uint64_t delta =
         absolute_time_diff_us(get_absolute_time(), wd->last_transition);
     if (wd->set && delta > wd->us_high)
