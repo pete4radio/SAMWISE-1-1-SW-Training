@@ -18,16 +18,19 @@ void payload_task_init(slate_t *slate)
     LOG_INFO("Turning on Payload...");
     payload_turn_on(slate);
 
-    // TODO: initialization needs to be moved into a separate function
+    // TODO: initialization needs to be moved into a separate task
+    //  This wait blocks the scheduler from running other tasks, and the
     // init is only executed once, but we should toggle RPi on only when
     // commands need to be executed.
     LOG_INFO("Waiting for Pi to boot up...");
     safe_sleep_ms(10000);
 }
 
+/* Test helpers used only in TEST builds */
+#ifdef TEST
 void beacon_down_command_test(slate_t *slate)
 {
-    char packet[] = "[\"send_file_2400\", [\"home/pi/code/main.py\"], {}]";
+    const char packet[] = "[\"send_file_2400\", [\"home/pi/code/main.py\"], {}]";
     int len = sizeof(packet) - 1;
     payload_uart_write_packet(slate, packet, len, 999);
 
@@ -38,22 +41,18 @@ void beacon_down_command_test(slate_t *slate)
 
     if (received_len == 0)
     {
-        LOG_INFO("Did not received anything!");
+        LOG_INFO("Did not receive anything!");
     }
     else
-    {
-        LOG_INFO("Received something:");
-        for (uint16_t i = 0; i < received_len; i++)
         {
-            printf("%c", received[i]);
+            LOG_INFO("Received something:");
+            LOG_INFO("%.*s", (int)received_len, received);
         }
-        printf("\n");
-    }
 }
 
 void ping_command_test(slate_t *slate)
 {
-    char packet[] = "[\"ping\", [], {}]";
+    const char packet[] = "[\"ping\", [], {}]";
     int len = sizeof(packet) - 1;
     payload_uart_write_packet(slate, packet, len, 999);
 
@@ -68,14 +67,10 @@ void ping_command_test(slate_t *slate)
     else
     {
         LOG_INFO("ACK received!");
-        LOG_INFO("ACK:");
-        for (uint16_t i = 0; i < received_len; i++)
-        {
-            printf("%c", received[i]);
-        }
-        printf("\n");
+        LOG_INFO("ACK: %.*s", (int)received_len, received);
     }
 }
+#endif
 
 bool try_execute_payload_command(slate_t *slate)
 {

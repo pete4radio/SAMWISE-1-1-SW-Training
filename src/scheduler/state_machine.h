@@ -40,6 +40,16 @@ typedef struct sched_task
      */
     void (*task_dispatch)(slate_t *slate);
 
+    /**
+     * Recent runtimes (ms) for this task. Circular buffer of last 5 runs.
+     */
+    uint8_t runtime[5];
+
+    /**
+     * Index into `runtime` for the next write (0..4).
+     */
+    uint8_t runtime_next;
+
 } sched_task_t;
 
 /**

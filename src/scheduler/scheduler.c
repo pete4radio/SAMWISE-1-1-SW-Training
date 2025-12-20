@@ -11,6 +11,9 @@
 
 sched_state_t *overridden_state = NULL;
 
+/* Timestamp of last runtime-stats log */
+static absolute_time_t last_stats_log;
+
 /*
  * Include the actual state machine
  */
@@ -62,6 +65,10 @@ void sched_init(slate_t *slate)
     {
         LOG_DEBUG("sched: Initializing task %s", all_tasks[i]->name);
         all_tasks[i]->task_init(slate);
+        /* initialize runtime tracking buffer */
+        for (size_t r = 0; r < 5; ++r)
+            all_tasks[i]->runtime[r] = 0;
+        all_tasks[i]->runtime_next = 0;
     }
 
     for (size_t i = 0; i < n_tasks; i++)
@@ -76,6 +83,9 @@ void sched_init(slate_t *slate)
     slate->current_state = initial_state;
     slate->entered_current_state_time = get_absolute_time();
     slate->time_in_current_state_ms = 0;
+
+    /* Initialize stats log timer */
+    last_stats_log = get_absolute_time();
 
     LOG_DEBUG("sched: Done initializing!");
 }
@@ -93,6 +103,12 @@ void sched_dispatch(slate_t *slate)
     /*
      * Loop through all of this state's tasks
      */
+
+    //. Print the average run time once every 60 seconds
+    absolute_time_t now = get_absolute_time();
+    static absolute_time_t last_runtime_print = {0};
+
+    {
     for (size_t i = 0; i < current_state_info->num_tasks; i++)
     {
         sched_task_t *task = current_state_info->task_list[i];
@@ -105,7 +121,21 @@ void sched_dispatch(slate_t *slate)
             task->next_dispatch =
                 make_timeout_time_ms(task->dispatch_period_ms);
 
-            task->task_dispatch(slate);
+            /* measure dispatch runtime */
+            absolute_time_t t_start = get_absolute_time();
+            task->task_dispatch(slate);     // Run the task
+            absolute_time_t t_end = get_absolute_time();
+
+            int64_t diff_us = absolute_time_diff_us(t_start, t_end);
+            if (diff_us < 0)
+                diff_us = 0;
+            uint32_t diff_ms = (uint32_t)(diff_us / 1000);
+
+            /* clamp to 255 for uint8_t storage */
+            uint8_t store_ms = diff_ms > 255 ? 255 : (uint8_t)diff_ms;
+
+            task->runtime[task->runtime_next] = store_ms;
+            task->runtime_next = (task->runtime_next + 1) % 5;
         }
     }
 
@@ -113,6 +143,29 @@ void sched_dispatch(slate_t *slate)
         absolute_time_diff_us(slate->entered_current_state_time,
                               get_absolute_time()) /
         1000;
+
+    /* Log all task averages every 60 seconds */
+    if (absolute_time_diff_us(last_stats_log, get_absolute_time()) >=
+        60LL * 1000LL * 1000LL)
+    {
+        for (size_t ti = 0; ti < n_tasks; ++ti)
+        {
+            sched_task_t *t = all_tasks[ti];
+            uint32_t sum = 0;
+            uint8_t count = 0;
+            for (size_t r = 0; r < 5; ++r)
+            {
+                if (t->runtime[r] != 0)
+                {
+                    sum += t->runtime[r];
+                    count++;
+                }
+            }
+            uint32_t avg = count ? (sum / count) : 0;
+            LOG_DEBUG("sched: stats %s avg %u ms", t->name, avg);
+        }
+        last_stats_log = get_absolute_time();
+    }
 
     /*
      * Transition to the next state, if required.

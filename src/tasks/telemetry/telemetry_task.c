@@ -1,5 +1,44 @@
 #include "telemetry_task.h"
 
+/*
+ * telemetry_task.c - telemetry collection and reporting
+ *
+ * Functions:
+ * - telemetry_task_init(slate_t *slate):
+ *     Initialize power monitor (ADM1176) and both MPPT (LT8491). On non-PICO
+ *     builds the code scans the I2C bus and configures devices; on PICO
+ *     (TEST) builds it initializes mocked instances.
+ * - telemetry_task_dispatch(slate_t *slate):
+ *     Read ADM1176 voltage/current and LT8491 telemetry, update `slate`
+ *     fields (battery/solar voltage & current), log values, and update
+ *     RBF (remove-before-flight) detection status.
+ *
+ * Export:
+ * - `telemetry_task`: scheduler descriptor used to register the task.
+ */
+/*
+ * Review notes:
+ * - I2C scan cost: scanning all 7-bit addresses with blocking timed reads is
+ *   slow at init; limit addresses, probe known addresses first, or remove
+ *   full scan in flight.
+ * - I2C error handling: check `found_device` before initializing drivers or
+ *   set a slate flag / return status so dispatch can skip reads when absent.
+ * - Blocking on init: the scan and per-address timeouts block startup; move
+ *   to background or shorten per-address timeout to avoid long delays.
+ * - Float logging: `%f` may not be available unless float printf is linked;
+ *   prefer integer mV/mA logs or enable float support in the toolchain.
+ * - 64-bit GPIO print: use `PRIu64`/`PRIx64` or cast to `unsigned long long`
+ *   and use `%016llX` for portable formatting of 64-bit values.
+ * - Type/overflow checks: converting floats to `uint16_t` for mV/mA may
+ *   overflow silently for large inputs—validate or clamp before casting.
+ * - Logging style: avoid embedding `\n` in `LOG_*` messages; let the logging
+ *   layer handle line endings and severity.
+ * - Mock vs real init: ensure mocked instances mirror real error returns so
+ *   dispatch logic behaves consistently.
+ * - Suggestion: consider returning a status from `telemetry_task_init` or
+ *   set a `slate` flag indicating sensor availability.
+ */
+
 // Add power monitor instance
 static adm1176_t power_monitor;
 // Add MPPT instance
@@ -26,7 +65,7 @@ void telemetry_task_init(slate_t *slate)
                                     make_timeout_time_ms(I2C_TIMEOUT_MS));
         if (ret >= 0)
         { // If ret is not an error code (i.e., ACK received)
-            LOG_INFO("MPPT Device found at 0x%02X\n", addr);
+            LOG_INFO("MPPT Device at 0x%02X\n", addr);
             found_device = true;
         }
         LOG_INFO("Scanning POWER_I2C address 0x%02X\n", addr);
@@ -35,7 +74,7 @@ void telemetry_task_init(slate_t *slate)
                                       make_timeout_time_ms(I2C_TIMEOUT_MS));
         if (ret >= 0)
         { // If ret is not an error code (i.e., ACK received)
-            LOG_INFO("Power Monitor Device found at 0x%02X\n", addr);
+            LOG_INFO("Power Monitor Device at 0x%02X\n", addr);
             found_device = true;
         }
     }
